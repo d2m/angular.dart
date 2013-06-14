@@ -6,19 +6,18 @@ main() {
   describe('dte.compiler', () {
     Compiler $compile;
     Scope $rootScope;
-    Directives directives;
+    DirectiveRegistry directives;
 
     beforeEach(inject((Injector injector) {
-      directives = injector.get(Directives);
+      directives = injector.get(DirectiveRegistry);
 
       directives.register(NgBindAttrDirective);
       directives.register(NgRepeatAttrDirective);
 
-      $compile = injector.get(Compiler);
       $rootScope = injector.get(Scope);
     }));
 
-    it('should compile basic hello world', inject(() {
+    it('should compile basic hello world', inject((Compiler $compile) {
       var element = $('<div ng-bind="name"></div>');
       var template = $compile(element);
 
@@ -30,7 +29,7 @@ main() {
       expect(element.text()).toEqual('angular');
     }));
 
-    it('should compile a directive in a child', inject(() {
+    it('should compile a directive in a child', inject((Compiler $compile) {
       var element = $('<div><div ng-bind="name"></div></div>');
       var template = $compile(element);
 
@@ -45,7 +44,7 @@ main() {
     }));
 
 
-    it('should compile repeater', inject(() {
+    it('should compile repeater', inject((Compiler $compile) {
       var element = $('<div><div ng-repeat="item in items" ng-bind="item"></div></div>');
       var template = $compile(element);
 
@@ -54,6 +53,24 @@ main() {
 
       expect(element.text()).toEqual('');
       // TODO(deboer): Digest twice until we have dirty checking in the scope.
+      $rootScope.$digest();
+      $rootScope.$digest();
+      expect(element.text()).toEqual('Ab');
+
+      $rootScope.items = [];
+      $rootScope.$digest();
+      expect(element.html()).toEqual('<!--ANCHOR: ng-repeat=item in items-->');
+    }));
+
+    xit('should compile repeater with children', inject(() {
+      var element = $('<div><div ng-repeat="item in items"><div ng-bind="item"></div></div></div>');
+      var template = $compile(element);
+
+      $rootScope.items = ['A', 'b'];
+      template(element).attach($rootScope);
+
+      expect(element.text()).toEqual('');
+// TODO(deboer): Digest twice until we have dirty checking in the scope.
       $rootScope.$digest();
       $rootScope.$digest();
       expect(element.text()).toEqual('Ab');

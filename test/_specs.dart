@@ -94,10 +94,12 @@ class JQuery implements List<Node> {
       // do nothing;
     } else if (selector is String) {
       _list.addAll(es(selector));
+    } else if (selector is List) {
+      _list.addAll(selector);
     } else if (selector is Node) {
       add(selector);
     } else {
-      throw new ArgumentError();
+      throw selector;
     }
   }
 
@@ -130,6 +132,8 @@ class JQuery implements List<Node> {
   contents() => fold(new JQuery(), (jq, node) => jq..addAll(node.nodes));
   toString() => fold('', (html, node) => '$html${_toHtml(node, true)}');
   eq(num childIndex) => $(this[childIndex]);
+  remove() => forEach((n) => n.remove());
+  attr([String name]) => accessor((n) => n.attributes[name], (n, v) => n.attributes[name] = v);
 }
 
 class Logger implements List {
@@ -143,7 +147,7 @@ class SpecInjector {
   List<Module> modules = [new Module()..value(Expando, new Expando('specExpando'))];
 
   module(Function fn) {
-    Module module = new Module();
+    Module module = new AngularModule();
     modules.add(module);
     fn(module);
   }

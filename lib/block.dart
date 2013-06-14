@@ -52,7 +52,7 @@ class BlockFactory {
                BlockListFactory this.$blockListFactory,
                Injector this.$injector);
 
-  call(blockNodeList, directivePositions, blockCaches, group) {
+  call(List<dom.Node> blockNodeList, List directivePositions, List<BlockCache> blockCaches, String group) {
     ASSERT(blockNodeList != null);
     ASSERT(directivePositions != null);
     ASSERT(blockCaches != null);
@@ -88,13 +88,15 @@ class Block implements ElementWrapper {
   }
 
   _link(List<dom.Node> nodeList, List directivePositions, List<BlockCache> blockCaches) {
+    var stack;
+    try {throw '';} catch(e,s) {stack = s;}
     var preRenderedIndexOffset = 0;
     var directiveDefsByName = {};
 
     for (num i = 0, ii = directivePositions.length; i < ii;) {
       num index = directivePositions[i++];
 
-      List<DirectiveDef> directiveDefs = directivePositions[i++];
+      List<DirectiveRef> directiveDefs = directivePositions[i++];
       List childDirectivePositions = directivePositions[i++];
       var nodeListIndex = index + preRenderedIndexOffset;
       dom.Node node = nodeList[nodeListIndex];
@@ -120,17 +122,17 @@ class Block implements ElementWrapper {
             preRenderedIndexOffset += blockCache.preRenderedElementCount;
           }
 
-          var directiveDef = directiveDefs[j];
-          var name = directiveDef.directiveFactory.$name;
+          var directiveRef = directiveDefs[j];
+          var name = directiveRef.directive.$name;
 
           if (name == null) {
             name = nextUid();
           }
 
           directiveNames.add(name);
-          directiveDefsByName[name] = directiveDef;
-          if (directiveDef.isComponent()) {
-            anchorsByName[name] = $blockListFactory([node], directiveDef.blockTypes, blockCache);
+          directiveDefsByName[name] = directiveRef;
+          if (directiveRef.isComponent()) {
+            anchorsByName[name] = $blockListFactory([node], directiveRef.blockTypes, blockCache);
           }
         }
         _instantiateDirectives(directiveDefsByName, directiveNames, node, anchorsByName);
@@ -145,7 +147,7 @@ class Block implements ElementWrapper {
     }
   }
 
-  _instantiateDirectives(Map<String, DirectiveDef> directiveDefsByName,
+  _instantiateDirectives(Map<String, DirectiveRef> directiveDefsByName,
                          List<String> directiveNames,
                          dom.Node node,
                          Map<String, BlockList> anchorsByName) {
@@ -153,23 +155,35 @@ class Block implements ElementWrapper {
     elementModule.value(Block, this);
     elementModule.value(dom.Element, node);
     elementModule.value(dom.Node, node);
-    directiveDefsByName.values.forEach((DirectiveDef def) => elementModule.type(
-                def.directiveFactory.directiveType, def.directiveFactory.directiveType));
+    directiveDefsByName.values.forEach((DirectiveRef def) => elementModule.type(
+                def.directive.directiveControllerType, def.directive.directiveControllerType));
 
     for (var i = 0, ii = directiveNames.length; i < ii; i++) {
       var directiveName = directiveNames[i];
-      DirectiveDef directiveDef = directiveDefsByName[directiveName];
+      DirectiveRef directiveRef = directiveDefsByName[directiveName];
 
       var directiveModule = new Module();
 
       directiveModule.value(DirectiveValue,
-          new DirectiveValue.fromString(directiveDef.value));
+          new DirectiveValue.fromString(directiveRef.value));
 
-      var controllerType = directiveDef.directiveFactory.$controllerType;
-      var requiredController = directiveDef.directiveFactory.$requiredController;
+      var controllerType = directiveRef.directive.$controllerType;
+      String requiredController = directiveRef.directive.$requiredController;
 
       if (requiredController != null) {
         directiveModule.factory(Controller, (dom.Node node, Expando elementControllers) {
+          getInheritedController(n, requiredController) {
+            if (n == null) return null;
+            var controller, expando;
+            if ((expando = elementControllers[n]) != null && (controller = expando[requiredController]) != null) {
+              return controller;
+            }
+            return getInheritedController(n.parentNode, requiredController);
+          }
+          if (requiredController.startsWith('\$^')) {
+            return getInheritedController(node.parentNode, requiredController.replaceFirst('^', ''));
+          }
+          if (elementControllers[node] == null) return null;
           return elementControllers[node][requiredController];
         });
       } else {
@@ -180,7 +194,7 @@ class Block implements ElementWrapper {
         directiveModule.value(BlockList, anchorsByName[directiveName]);
       }
 
-      Type directiveType = directiveDef.directiveFactory.directiveType;
+      Type directiveType = directiveRef.directive.directiveControllerType;
 
       var types = [directiveType];
       if (controllerType != null) types.add(controllerType);
@@ -197,7 +211,20 @@ class Block implements ElementWrapper {
         controllers[requiredController] = controller;
       }
 
-      var directive = injector.get(directiveType);
+      var directive;
+      try {
+
+      directive = injector.get(directiveType);
+      } catch (e,s) {
+        var msg;
+        if (e is MirroredUncaughtExceptionError) {
+          msg = e.exception_string + "\n ORIGINAL Stack trace:\n" + e.stacktrace.toString();
+        } else {
+          msg = "Creating $directiveName: "  + e.toString();
+        }
+
+        throw msg;
+      }
       directives.add(directive);
     }
   }
